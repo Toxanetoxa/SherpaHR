@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
+  readonly readOnly = false;
   userId = 1;
 
   async request<T>(path: string, method = 'GET', data?: unknown): Promise<T> {

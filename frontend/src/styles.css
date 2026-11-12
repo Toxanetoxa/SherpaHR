@@ -152,6 +152,34 @@ main {
   padding:34px 36px;
   max-width:1450px;
 }
+.pages-demo-note {
+  margin:0 0 24px;
+  padding:10px 14px;
+  border:1px solid #d2e8da;
+  border-radius:6px;
+  background:#edf6f0;
+  color:#245b3e;
+  line-height:1.5;
+}
+.preview-task-details h2 {
+  margin:0 0 12px;
+}
+.preview-task-details p {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.preview-task-details dl {
+  display:grid;
+  grid-template-columns:max-content 1fr;
+  gap:8px 16px;
+}
+.preview-task-details dt {
+  color:#596671;
+}
+.preview-task-details dd {
+  margin:0;
+  overflow-wrap:anywhere;
+}
 .breadcrumb {
   font-size:12px;
   color:#68757f;

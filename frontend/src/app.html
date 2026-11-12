@@ -1,6 +1,6 @@
 <header class="topbar">
-  <a class="brand" href="/">◈ <span>Project Desk</span></a>
-  <span class="demo-tag">Демонстрационное приложение</span>
+  <a class="brand" href="./">◈ <span>Project Desk</span></a>
+  <span class="demo-tag">{{api.readOnly ? 'Демо · только просмотр' : 'Демонстрационное приложение'}}</span>
   <label class="persona">Демо-пользователь
     <select aria-label="Демо-пользователь" [value]="api.userId" (change)="switchUser($any($event.target).value)">
       <option value="1">Анна · руководитель</option><option value="2">Борис · разработчик</option><option value="3">Вера · аналитик</option>
@@ -23,6 +23,14 @@
     <div class="sidebar-note">Задачи, договорённости<br>и история команды.</div>
   </nav>
   <main>
+    @if (api.readOnly) {
+      <p class="pages-demo-note">
+        @if (context(); as demoContext) {
+          Снимок демо-данных от <time [attr.datetime]="demoContext.server_now">{{demoContext.server_now | date:'dd.MM.yyyy HH:mm':'UTC'}} UTC</time>.
+        }
+        Для редактирования запустите приложение локально.
+      </p>
+    }
     @if (error()) { <div role="alert" class="alert error">{{error()}}</div> }
     @if (notice()) { <div role="status" class="alert success">{{notice()}}</div> }
     @if (attentionOpen()) {
@@ -33,7 +41,9 @@
             <h1 #attentionTitle tabindex="-1">Требуют внимания</h1>
             <p>Задачи всех исполнителей в активных проектах под вашим руководством.</p>
           </div>
-          <button type="button" (click)="refreshAttention()" [disabled]="attentionLoading()">Обновить</button>
+          @if (!api.readOnly) {
+            <button type="button" (click)="refreshAttention()" [disabled]="attentionLoading()">Обновить</button>
+          }
         </div>
 
         @if (attentionError()) {
@@ -92,14 +102,16 @@
         } @else if (!attentionError()) {
           <div class="attention-empty" role="status">
             <strong>Сейчас нет задач, требующих внимания</strong>
-            <p>Новые сигналы появятся при изменении задач или обсуждений. Чтобы проверить сводку снова, нажмите «Обновить».</p>
+            @if (!api.readOnly) {
+              <p>Новые сигналы появятся при изменении задач или обсуждений. Чтобы проверить сводку снова, нажмите «Обновить».</p>
+            }
           </div>
         }
       </div>
     } @else if (project(); as p) {
       <div class="breadcrumb">Проекты <span>/</span> {{p.archived ? 'Архив' : 'Рабочее пространство'}}</div>
       <div class="page-heading"><div><h1>{{p.name}}</h1><p>{{p.description}}</p></div>
-        @if (!p.archived) { <button class="primary" (click)="createTask($event.currentTarget)" [disabled]="loading() || saving()">＋ Новая задача</button> }
+        @if (!api.readOnly && !p.archived) { <button class="primary" (click)="createTask($event.currentTarget)" [disabled]="loading() || saving()">＋ Новая задача</button> }
       </div>
       <div class="project-meta"><span>Руководитель: {{userName(p.owner_id)}}</span><span>{{p.members.length}} участника</span>@if (p.archived) { <span class="badge">Только чтение</span> }</div>
       <section class="task-section" aria-label="Задачи проекта">
@@ -134,21 +146,35 @@
         </div>
         <button aria-label="Закрыть карточку" (click)="closeDetail(true)">✕</button>
       </div>
-      <form (ngSubmit)="saveTask()">
-        <fieldset [disabled]="!detailProject() || !!detailProject()?.archived || saving()">
-          <label>Название<input name="title" [(ngModel)]="draft.title" required maxlength="200"></label>
-          <label>Описание<textarea name="description" [(ngModel)]="draft.description" rows="4" maxlength="5000"></textarea></label>
-          <div class="form-row"><label>Статус<select name="status" aria-label="Статус" [(ngModel)]="draft.status">@for (s of statuses; track s.value) { <option [value]="s.value">{{s.label}}</option> }</select></label>
-          <label>Исполнитель<select name="assignee" aria-label="Исполнитель" [(ngModel)]="draft.assignee_id"><option [ngValue]="null">Не назначен</option>@for (u of detailProject()?.members; track u.id) { <option [ngValue]="u.id">{{u.name}}</option> }</select></label></div>
-          <label>Срок (UTC)<input type="datetime-local" name="due" [(ngModel)]="draft.due_at"></label>
-          @if (detailProject() && !detailProject()?.archived) { <button type="submit" class="primary" [disabled]="!draft.title.trim()">{{saving() ? 'Сохраняем…' : 'Сохранить задачу'}}</button> }
-        </fieldset>
-      </form>
+      @if (api.readOnly) {
+        @if (detail(); as task) {
+          <section class="preview-task-details" aria-label="Сведения о задаче">
+            <h2>{{task.title}}</h2>
+            @if (task.description) { <p>{{task.description}}</p> }
+            <dl>
+              <dt>Статус</dt><dd>{{statusLabel(task.status)}}</dd>
+              <dt>Исполнитель</dt><dd>{{userName(task.assignee_id)}}</dd>
+              <dt>Срок (UTC)</dt><dd>{{task.due_at ? (task.due_at | date:'dd.MM.yyyy HH:mm':'UTC') : 'Без срока'}}</dd>
+            </dl>
+          </section>
+        }
+      } @else {
+        <form (ngSubmit)="saveTask()">
+          <fieldset [disabled]="!detailProject() || !!detailProject()?.archived || saving()">
+            <label>Название<input name="title" [(ngModel)]="draft.title" required maxlength="200"></label>
+            <label>Описание<textarea name="description" [(ngModel)]="draft.description" rows="4" maxlength="5000"></textarea></label>
+            <div class="form-row"><label>Статус<select name="status" aria-label="Статус" [(ngModel)]="draft.status">@for (s of statuses; track s.value) { <option [value]="s.value">{{s.label}}</option> }</select></label>
+            <label>Исполнитель<select name="assignee" aria-label="Исполнитель" [(ngModel)]="draft.assignee_id"><option [ngValue]="null">Не назначен</option>@for (u of detailProject()?.members; track u.id) { <option [ngValue]="u.id">{{u.name}}</option> }</select></label></div>
+            <label>Срок (UTC)<input type="datetime-local" name="due" [(ngModel)]="draft.due_at"></label>
+            @if (detailProject() && !detailProject()?.archived) { <button type="submit" class="primary" [disabled]="!draft.title.trim()">{{saving() ? 'Сохраняем…' : 'Сохранить задачу'}}</button> }
+          </fieldset>
+        </form>
+      }
       @if (detail(); as task) {
         <section class="comments"><h2 #discussionTitle tabindex="-1">Обсуждение <span>{{task.comments.length}}</span></h2>
           @for (c of task.comments; track c.id) { <article><strong>{{c.author}}</strong><time>{{c.created_at | date:'dd.MM.yyyy HH:mm':'UTC'}}</time><p>{{c.body}}</p></article> }
           @empty { <p class="muted">Комментариев пока нет.</p> }
-          @if (detailProject() && !detailProject()?.archived) { <form (ngSubmit)="addComment()"><label>Комментарий<textarea name="comment" [(ngModel)]="comment" rows="3" required maxlength="2000" [disabled]="saving()"></textarea></label><button type="submit" [disabled]="!comment.trim() || saving()">Добавить комментарий</button></form> }
+          @if (!api.readOnly && detailProject() && !detailProject()?.archived) { <form (ngSubmit)="addComment()"><label>Комментарий<textarea name="comment" [(ngModel)]="comment" rows="3" required maxlength="2000" [disabled]="saving()"></textarea></label><button type="submit" [disabled]="!comment.trim() || saving()">Добавить комментарий</button></form> }
         </section>
       }
     </aside>

@@ -27,6 +27,8 @@
 !/.github/pull_request_template.md
 
 # CANDIDATE SOLUTION: in your own fork, add the paths of your solution here.
+!/scripts/
+!/scripts/export-pages.php
 
 # Keep these exclusions AFTER candidate additions.
 **/.git/

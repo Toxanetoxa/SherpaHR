@@ -19,6 +19,10 @@
           },
           "configurations": {
             "production": { "outputHashing": "all", "budgets": [{ "type": "initial", "maximumWarning": "600kB", "maximumError": "1MB" }] },
+            "pages": {
+              "baseHref": "/SherpaHR/",
+              "fileReplacements": [{ "replace": "src/api.ts", "with": "src/api.pages.ts" }]
+            },
             "development": { "optimization": false, "sourceMap": true }
           },
           "defaultConfiguration": "production"
