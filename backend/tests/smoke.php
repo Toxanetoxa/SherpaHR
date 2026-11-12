@@ -53,6 +53,20 @@ function check(bool $condition, string $message): void
     echo 'PASS: ' . $message . PHP_EOL;
 }
 
+function attention(int $user = 1): array
+{
+    [$status, $response] = request('GET', '/api/attention', null, $user);
+    if ($status !== 200 || !isset($response['data']) || !array_is_list($response['data'])) {
+        throw new RuntimeException('Expected a 200 attention list, got ' . $status);
+    }
+    $tasks = array_column($response['data'], 'task');
+    $items = array_combine(array_column($tasks, 'id'), $response['data']);
+    if (count($items) !== count($response['data'])) {
+        throw new RuntimeException('Attention contains duplicate tasks');
+    }
+    return $items;
+}
+
 try {
     $ready = false;
     for ($attempt = 0; $attempt < 50; ++$attempt) {
@@ -113,6 +127,73 @@ try {
     check(count($response['data']) === 6, 'initialization does not duplicate or reset data');
     check(request('GET', '/api/tasks/9999')[0] === 404, 'missing task returns 404');
     check(request('GET', '/api/unknown')[0] === 404, 'unknown route returns 404');
+
+    $inbox = attention();
+    check(isset($inbox[1], $inbox[5]) && $inbox[1]['task']['assignee_id'] === 2
+        && $inbox[5]['project_id'] === 2, 'attention spans led projects and other assignees');
+    check(!array_intersect(array_keys($inbox), [3, 9, 10, 11]), 'attention excludes done, archived and foreign tasks');
+    check(attention(2) === [], 'membership alone does not grant a project in attention');
+    check(array_keys(attention(3)) === [11], 'a leader sees attention only for their own active projects');
+    check(request('GET', '/api/attention', null, 999)[0] === 401, 'attention rejects an unknown persona');
+
+    // Use the running server clock rather than assuming the fixed demo seed is recent.
+    [, $response] = request('GET', '/api/context');
+    $now = new DateTimeImmutable($response['data']['server_now']);
+    $deadline = fn(string $offset): string => $now->modify($offset)->format('Y-m-d\TH:i:s\Z');
+    $makeTask = function (string $title, array $fields = [], int $project = 1): array {
+        [$status, $response] = request('POST', "/api/projects/$project/tasks", ['title' => $title] + $fields);
+        if ($status !== 201) {
+            throw new RuntimeException('Could not prepare attention test task: ' . $title);
+        }
+        return $response['data'];
+    };
+    $blockedOverdue = $makeTask('Заблокирована и просрочена', ['status' => 'blocked', 'due_at' => $deadline('-2 hours')]);
+    $blocked = $makeTask('Заблокирована', ['status' => 'blocked']);
+    $overdue = $makeTask('Просрочена', ['due_at' => $deadline('-1 hour')]);
+    $help = $makeTask('Запрос помощи', [], 3);
+    $dueSoon = $makeTask('Близкий срок', ['due_at' => $deadline('+23 hours 55 minutes')]);
+    $later = $makeTask('Срок за пределами окна', ['due_at' => $deadline('+24 hours 5 minutes')]);
+    $neutral = $makeTask('Без препятствий');
+    $stale = $makeTask('Устаревший комментарий');
+
+    [$status, $response] = request('POST', '/api/tasks/' . $help['id'] . '/comments', ['body' => 'Нужна помощь руководителя с выбором.'], 3);
+    $evidence = $response['data'];
+    check($status === 201, 'teammate can write a request for help');
+    request('POST', '/api/tasks/' . $help['id'] . '/comments', ['body' => 'Клиент пришлёт пример завтра.'], 3);
+    request('POST', '/api/tasks/' . $neutral['id'] . '/comments', ['body' => 'Препятствий нет. Помощь не нужна.'], 2);
+    [$status, $response] = request('POST', '/api/tasks/' . $stale['id'] . '/comments', ['body' => 'Нужна помощь руководителя с выбором.'], 2);
+    check($status === 201, 'request for help can be aged in the disposable fixture');
+    $fixtureDb = new PDO('sqlite:' . $environment['DB_PATH'], null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $fixtureDb->prepare('UPDATE comments SET created_at = ? WHERE id = ?')
+        ->execute([$deadline('-7 days -5 minutes'), $response['data']['id']]);
+
+    $inbox = attention();
+    $ranked = array_column([$blockedOverdue, $blocked, $overdue, $help, $dueSoon], 'id');
+    check(array_values(array_intersect(array_keys($inbox), $ranked)) === $ranked, 'attention orders stronger signals before weaker ones');
+    check(in_array('blocked', $inbox[$blockedOverdue['id']]['signals'], true)
+        && in_array('overdue', $inbox[$blockedOverdue['id']]['signals'], true), 'blocked and overdue signals coexist');
+    check($inbox[$dueSoon['id']]['signals'] === ['due_soon'] && !isset($inbox[$later['id']]), 'due-soon window ends after 24 hours');
+    check(!isset($inbox[$neutral['id']]) && !isset($inbox[$stale['id']]), 'neutral and stale comments do not request attention');
+    $helpItem = $inbox[$help['id']];
+    check($helpItem['signals'] === ['needs_help'] && $helpItem['task']['assignee_id'] === null
+        && $helpItem['evidence']['id'] === $evidence['id'] && $helpItem['evidence']['body'] === $evidence['body']
+        && $helpItem['evidence']['author'] === $evidence['author'], 'unassigned task retains the matching discussion evidence');
+
+    $detail = request('GET', '/api/tasks/' . $help['id'])[1]['data'];
+    check(count($detail['comments']) === 2, 'attention item still opens the full task discussion');
+    request('POST', '/api/tasks/' . $blocked['id'] . '/comments', ['body' => 'Без доступа не продолжить.'], 2);
+    check(in_array('needs_help', attention()[$blocked['id']]['signals'], true), 'new blocker comment appears without editing the task');
+    request('POST', '/api/tasks/' . $blocked['id'] . '/comments', ['body' => 'Доступ получен.'], 2);
+    $blockedItem = attention()[$blocked['id']];
+    check($blockedItem['signals'] === ['blocked'] && $blockedItem['evidence'] === null, 'recovery comment clears evidence while the blocked status remains');
+    check(request('PATCH', '/api/tasks/' . $help['id'], ['status' => 'done', 'version' => $detail['version']])[0] === 200
+        && !isset(attention()[$help['id']]), 'resolving the task removes it from attention on the next read');
+
+    $membershipTask = $makeTask('Проект с изменённым доступом', ['status' => 'blocked'], 3);
+    check(isset(attention()[$membershipTask['id']]), 'leader sees the item while a member');
+    $fixtureDb->exec('DELETE FROM project_members WHERE project_id = 3 AND user_id = 1');
+    check(!isset(attention()[$membershipTask['id']]), 'ownership without membership does not grant access to attention');
+
     echo "PASS: $count API checks\n";
 } catch (Throwable $error) {
     fwrite(STDERR, $error->getMessage() . PHP_EOL . file_get_contents($directory . '/server.log'));
