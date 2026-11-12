@@ -58,6 +58,11 @@ final class Application
             $this->respond($projects);
             return;
         }
+        if ($method === 'GET' && $path === '/api/attention') {
+            $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+            $this->respond((new AttentionInbox($this->db))->forUser($this->userId, $now));
+            return;
+        }
         if (preg_match('#^/api/projects/(\d+)/tasks$#', $path, $match)) {
             $project = $this->project((int) $match[1]);
             if ($method === 'GET') {
