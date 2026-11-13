@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0b12" />
+    <meta name="description" content="Low Game — браузерный файтинг на двоих с прямым подключением." />
+    <title>LOW GAME — файтинг на двоих</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="game-screen">
+      <section id="nickname-screen" class="nickname-screen" aria-labelledby="nickname-title">
+        <div class="nickname-card">
+          <div class="brand nickname-brand">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+            <div class="brand-title">
+              <h1 id="nickname-title">LOW<span> GAME</span></h1>
+              <p>Файтинг на двоих</p>
+            </div>
+          </div>
+          <form id="nickname-form" class="nickname-form">
+            <label for="nickname-input">Никнейм</label>
+            <input id="nickname-input" name="nickname" type="text" maxlength="24" autocomplete="nickname" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-describedby="nickname-error" required />
+            <p id="nickname-error" class="nickname-error" role="alert"></p>
+            <p id="nickname-status" class="nickname-status" role="status"></p>
+            <div class="nickname-actions">
+              <button id="cancel-nickname" class="button button-secondary" type="button" hidden>Отмена</button>
+              <button id="nickname-submit" class="button button-primary" type="submit">Войти в лобби</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <header id="game-header" class="top-bar" hidden>
+        <div class="top-bar-inner">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+            <div class="brand-title">
+              <h1>LOW<span> GAME</span></h1>
+              <p>Файтинг на двоих</p>
+            </div>
+          </div>
+          <div id="connection-indicator" class="connection-indicator" data-state="idle" role="status">
+            <span class="status-light" aria-hidden="true"></span>
+            <span id="connection-status">Нет подключения</span>
+          </div>
+        </div>
+      </header>
+
+      <main id="game-layout" class="game-layout" hidden>
+        <section class="game-panel" aria-label="Игровая арена">
+          <div class="match-hud">
+            <div class="fighter-hud fighter-hud-left">
+              <div class="fighter-info">
+                <span class="fighter-slot">P1</span>
+                <strong class="fighter-name">RUST</strong>
+                <span class="mobile-you" aria-hidden="true">Вы</span>
+                <span class="fighter-hp"><span class="sr-only">Здоровье Rust </span><span id="p1-hp">100</span></span>
+              </div>
+              <div class="health-track" aria-hidden="true"><div id="p1-health" class="health-fill"></div></div>
+            </div>
+            <div class="match-clock">
+              <div class="match-time"><span class="sr-only">Время раунда </span><span id="timer">60</span></div>
+              <div class="match-score">
+                <span class="sr-only">Счёт по раундам </span>
+                <span id="p1-score">0</span><span aria-hidden="true">:</span><span id="p2-score">0</span>
+              </div>
+              <span id="mobile-fighter" class="sr-only"></span>
+            </div>
+            <div class="fighter-hud fighter-hud-right">
+              <div class="fighter-info">
+                <span class="fighter-slot">P2</span>
+                <strong class="fighter-name">VOLT</strong>
+                <span class="mobile-you" aria-hidden="true">Вы</span>
+                <span class="fighter-hp"><span class="sr-only">Здоровье Volt </span><span id="p2-hp">100</span></span>
+              </div>
+              <div class="health-track" aria-hidden="true"><div id="p2-health" class="health-fill"></div></div>
+            </div>
+          </div>
+
+          <div class="stage">
+            <canvas id="arena" width="960" height="440" aria-label="Арена боя между Rust и Volt">
+              Для игры нужен браузер с поддержкой Canvas.
+            </canvas>
+            <div id="arena-overlay" class="arena-overlay">
+              <div class="overlay-content">
+                <p id="arena-kicker" class="arena-kicker" hidden></p>
+                <h2 id="arena-title">К бою!</h2>
+                <p id="arena-message" class="arena-message">Создайте комнату или выберите соперника в лобби.</p>
+                <button id="rematch" class="button button-arena" type="button" hidden>Реванш</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="touch-controls" class="touch-controls" role="group" aria-label="Управление бойцом" hidden>
+            <div class="touch-cluster touch-cluster-movement">
+              <button type="button" class="touch-key touch-key-direction" data-action="left" aria-label="Влево">←</button>
+              <button type="button" class="touch-key touch-key-direction" data-action="right" aria-label="Вправо">→</button>
+              <button type="button" class="touch-key" data-action="jump">Прыжок</button>
+            </div>
+            <div class="mobile-match-actions">
+              <button id="mobile-fullscreen" class="button button-secondary" type="button" aria-label="На весь экран" title="На весь экран" hidden><span class="fullscreen-mark" aria-hidden="true"></span></button>
+              <button id="mobile-leave" class="button button-secondary" type="button" aria-label="Выйти из комнаты" title="Выйти из комнаты">Выйти</button>
+            </div>
+            <div class="touch-cluster touch-cluster-combat">
+              <button type="button" class="touch-key touch-key-block" data-action="block">Блок</button>
+              <button type="button" class="touch-key touch-key-attack" data-action="attack">Удар</button>
+            </div>
+          </div>
+
+          <section id="control-guide" class="control-guide" aria-label="Управление с клавиатуры">
+            <dl class="keyboard-layout">
+              <div class="keyboard-key keyboard-key-jump">
+                <dt><kbd data-key-code="KeyW">W</kbd></dt>
+                <dd>Прыжок</dd>
+              </div>
+              <div class="keyboard-key keyboard-key-left">
+                <dt><kbd data-key-code="KeyA">A</kbd></dt>
+                <dd>Влево</dd>
+              </div>
+              <div class="keyboard-key">
+                <dt><kbd data-key-code="KeyS">S</kbd></dt>
+                <dd>Блок</dd>
+              </div>
+              <div class="keyboard-key">
+                <dt><kbd data-key-code="KeyD">D</kbd></dt>
+                <dd>Вправо</dd>
+              </div>
+              <div class="keyboard-key">
+                <dt><kbd data-key-code="KeyF">F</kbd></dt>
+                <dd>Удар</dd>
+              </div>
+            </dl>
+          </section>
+        </section>
+
+        <aside class="lobby" aria-labelledby="lobby-title">
+          <div class="lobby-heading">
+            <span class="lobby-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+            <div>
+              <p class="lobby-kicker">ПРЯМОЕ ПОДКЛЮЧЕНИЕ</p>
+              <h2 id="lobby-title">Дуэль по сети</h2>
+            </div>
+          </div>
+
+          <div id="lobby-initial" class="lobby-step">
+            <div class="lobby-profile">
+              <div class="lobby-profile-identity">
+                <span>Ваш никнейм</span>
+                <strong id="player-nickname" dir="auto"></strong>
+              </div>
+              <button id="edit-nickname" class="button button-secondary" type="button" aria-label="Изменить никнейм">Изменить</button>
+            </div>
+            <section class="online-directory" aria-labelledby="online-title">
+              <h3 id="online-title">Игроки онлайн</h3>
+              <p id="online-status" class="public-status" role="status">Подключаемся к общему лобби…</p>
+              <ul id="online-players" class="online-players"></ul>
+            </section>
+            <button id="create-public-room" class="button button-primary" type="button" disabled>
+              Создать открытую комнату <span aria-hidden="true">↗</span>
+            </button>
+            <section class="public-directory" aria-labelledby="public-rooms-title">
+              <h3 id="public-rooms-title">Открытые комнаты</h3>
+              <p id="public-status" class="public-status" role="status">Подключаемся к общему лобби…</p>
+              <ul id="public-rooms" class="public-rooms"></ul>
+            </section>
+            <details id="manual-connection" class="manual-connection">
+              <summary>Закрытая дуэль по коду</summary>
+              <div class="manual-connection-body">
+                <button id="create-room" class="button button-secondary" type="button">Создать приглашение</button>
+                <div class="lobby-divider" aria-hidden="true"><span>или</span></div>
+                <form id="join-form" class="lobby-form">
+                  <label for="invite-input">Код приглашения</label>
+                  <textarea id="invite-input" rows="2" placeholder="Вставьте код или ссылку" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
+                  <button class="button button-secondary" type="submit">Присоединиться</button>
+                </form>
+                <div class="lobby-options">
+                  <label class="option-label">
+                    <input id="use-stun" type="checkbox" checked aria-describedby="stun-description" />
+                    <span>Помощь при подключении через интернет</span>
+                  </label>
+                  <p id="stun-description">STUN определяет внешний адрес. В одной сети можно отключить.</p>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div id="lobby-challenge" class="lobby-step" hidden>
+            <h3 id="challenge-title"></h3>
+            <p id="challenge-message" class="lobby-description" role="status"></p>
+            <div class="challenge-actions">
+              <button id="accept-challenge" class="button button-primary" type="button" hidden>Принять</button>
+              <button id="decline-challenge" class="button button-secondary" type="button" hidden>Отклонить</button>
+            </div>
+          </div>
+
+          <div id="lobby-public-wait" class="lobby-step" hidden>
+            <h3 id="public-wait-title"></h3>
+            <p id="public-wait-message" class="lobby-description" role="status"></p>
+            <code id="public-wait-room-id" class="room-id" aria-label="UUID комнаты" hidden></code>
+          </div>
+
+          <div id="lobby-exchange" class="lobby-step" hidden>
+            <h3 id="exchange-title">Приглашение в комнату</h3>
+            <p id="exchange-instructions" class="lobby-description"></p>
+            <div class="lobby-form">
+              <label id="outgoing-label" for="outgoing-code">Ваш код</label>
+              <textarea id="outgoing-code" rows="3" readonly spellcheck="false"></textarea>
+              <button id="copy-code" class="button button-primary" type="button">Скопировать код</button>
+              <button id="copy-link" class="button button-secondary" type="button" hidden>Скопировать ссылку</button>
+            </div>
+            <form id="answer-form" class="lobby-form answer-form" hidden>
+              <label for="answer-input">Код ответа от друга</label>
+              <textarea id="answer-input" rows="2" placeholder="Вставьте код ответа" autocomplete="off" autocapitalize="off" spellcheck="false" required></textarea>
+              <button id="accept-answer" class="button button-secondary" type="submit">Подключить друга</button>
+            </form>
+          </div>
+
+          <div id="lobby-connected" class="lobby-step" hidden>
+            <h3>Соперник подключён</h3>
+            <p class="room-id-label">UUID комнаты</p>
+            <code id="room-id" class="room-id"></code>
+          </div>
+
+          <p id="lobby-message" class="lobby-message" role="status"></p>
+          <button id="leave-room" class="button button-secondary leave-room" type="button" hidden>Покинуть комнату</button>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
